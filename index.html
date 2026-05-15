@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ドランクアップカウンター</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3C6934">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="飲みカウ">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: -apple-system, 'Helvetica Neue', 'Hiragino Kaku Gothic ProN', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.55s ease, color 0.4s ease;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 390px;
+      padding: 28px 24px 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 0.22em;
+      opacity: 0.6;
+    }
+
+    .count-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      line-height: 1;
+    }
+
+    #cNum {
+      font-size: 5.5rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+
+    .count-unit {
+      font-size: 1.5rem;
+      font-weight: 500;
+      opacity: 0.5;
+      padding-bottom: 10px;
+    }
+
+    .char-area {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .char-area.pop {
+      animation: charPop 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+    }
+
+    @keyframes charPop {
+      0%   { transform: scale(1) translateY(0); }
+      30%  { transform: scale(1.2) translateY(-14px); }
+      60%  { transform: scale(1.07) translateY(-4px); }
+      100% { transform: scale(1) translateY(0); }
+    }
+
+    canvas {
+      width: 180px;
+      height: 180px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #flv {
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1.65;
+      min-height: 3.6em;
+      padding: 14px 20px;
+      background: #fff;
+      color: #1A2018;
+      border-radius: 16px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 24px;
+      height: 6px;
+      border-radius: 3px;
+      background: currentColor;
+      opacity: 0.15;
+      transition: opacity 0.35s ease, transform 0.15s ease;
+    }
+
+    .dot.lit {
+      opacity: 0.75;
+      transform: scaleY(1.5);
+    }
+
+    .btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr 58px;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 20px;
+      font-size: 1.45rem;
+      font-weight: 800;
+      cursor: pointer;
+      padding: 22px 0;
+      transition: transform 0.07s, opacity 0.15s;
+      letter-spacing: 0.02em;
+    }
+
+    .btn:active:not(:disabled) {
+      transform: scale(0.93);
+    }
+
+    #btnP1 {
+      background: #45A887;
+      color: #fff;
+    }
+
+    #btnP2 {
+      background: #BC5E65;
+      color: #fff;
+    }
+
+    #btnRst {
+      background: rgba(128, 128, 128, 0.2);
+      color: inherit;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      opacity: 0.7;
+    }
+
+    .btn:disabled {
+      opacity: 0.22;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="count-wrap">
+    <span id="cNum">0</span>
+    <span class="count-unit">杯</span>
+  </div>
+
+  <div class="char-area" id="charArea">
+    <canvas id="cv" width="10" height="10"></canvas>
+  </div>
+
+  <div id="flv"></div>
+
+  <div class="dots" id="dotsRow"></div>
+
+  <div class="btns">
+    <button class="btn" id="btnP1" onclick="add(1)">+1</button>
+    <button class="btn" id="btnP2" onclick="add(2)">+2</button>
+    <button class="btn" id="btnRst" onclick="rst()">リセット</button>
+  </div>
+</div>
+
+<script>
+const MAX = 10;
+
+// 警戒色: background color per stage (0..10)
+const BGS = [
+  '#FFFFFF', // 0
+  '#FFFFFF', // 1
+  '#C3D945', // 2
+  '#C3D945', // 3
+  '#C38B3E', // 4
+  '#7B291C', // 5
+  '#7B291C', // 6
+  '#9F88B4', // 7
+  '#281F87', // 8
+  '#281F87', // 9
+  '#1A1020', // 10
+];
+
+// Use dark text on bright backgrounds, light text on dark ones
+// Determined by contrast ratio against each background
+const DARK_TEXT = [true, true, true, true, true, false, false, true, false, false, false];
+
+const TEXTS = [
+  'よいお酒を！',
+  '1杯30分以上ペースで',
+  'あっという間の1時間！',
+  '飲み始めて2時間くらい経った？？',
+  'この段階が一番楽しい',
+  '水もおいしいよ',
+  '水飲もう',
+  '分水嶺',
+  '引き際',
+  '潮時',
+  'ここから先リスクの方が大きい',
+];
+
+// Sprite color palette (index → CSS color, 0 = transparent)
+const PAL = [
+  null,      // 0: transparent
+  '#23468C', // 1: 頭ワンポイント（紺）
+  '#45A887', // 2: 目・暗
+  '#97E6BD', // 3: 目・明
+  '#629359', // 4: 体・明
+  '#417737', // 5: 体・中
+  '#3C6934', // 6: 体・暗
+  '#45544D', // 7: 顔手・明
+  '#3E4B45', // 8: 顔手・中
+  '#272F2C', // 9: 顔手・暗
+  '#BC5E65', // 10: 口
+];
+
+// Sprite data: 11 frames (count 0..10), each a 10×10 array of palette indices
+const SP = [
+  // 0杯 (0,1,2用)
+  [[7,1,4,5,5,5,4,4,0,7],
+   [8,5,5,8,7,7,8,5,4,8],
+   [0,5,7,9,7,7,8,9,5,0],
+   [0,5,9,8,9,8,9,8,9,0],
+   [0,5,8,7,8,10,8,7,5,0],
+   [0,4,8,9,9,9,9,9,6,0],
+   [7,7,6,8,9,9,8,5,7,7],
+   [8,9,5,5,6,6,6,5,8,9],
+   [5,6,5,5,5,5,5,5,4,0],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 1杯 (0,1,2用)
+  [[7,1,4,5,5,5,4,4,0,7],
+   [8,5,5,8,7,7,8,5,4,8],
+   [0,5,7,9,7,7,8,9,5,0],
+   [0,5,9,8,9,8,9,8,9,0],
+   [0,5,8,7,8,10,8,7,5,0],
+   [0,4,8,9,9,9,9,9,6,0],
+   [7,7,6,8,9,9,8,5,7,7],
+   [8,9,5,5,6,6,6,5,8,9],
+   [5,6,5,5,5,5,5,5,4,0],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 2杯 (0,1,2用)
+  [[7,1,4,5,5,5,4,4,0,7],
+   [8,5,5,8,7,7,8,5,4,8],
+   [0,5,7,9,7,7,8,9,5,0],
+   [0,5,9,8,9,8,9,8,9,0],
+   [0,5,8,7,8,10,8,7,5,0],
+   [0,4,8,9,9,9,9,9,6,0],
+   [7,7,6,8,9,9,8,5,7,7],
+   [8,9,5,5,6,6,6,5,8,9],
+   [5,6,5,5,5,5,5,5,4,0],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 3杯 (3,4用)
+  [[0,1,4,5,5,5,4,4,0,0],
+   [7,5,5,9,7,7,9,5,4,7],
+   [8,5,7,3,7,7,8,3,5,9],
+   [0,5,7,2,8,8,8,2,5,0],
+   [0,5,7,7,8,10,8,7,5,0],
+   [0,6,8,9,9,9,9,9,6,0],
+   [7,7,6,8,9,9,8,5,7,7],
+   [8,9,5,5,6,6,6,5,8,9],
+   [0,6,5,5,5,5,5,5,4,0],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 4杯 (3,4用)
+  [[0,1,4,5,5,5,4,4,0,0],
+   [7,5,5,9,7,7,9,5,4,7],
+   [8,5,7,3,7,7,8,3,5,9],
+   [0,5,7,2,8,8,8,2,5,0],
+   [0,5,7,7,8,10,8,7,5,0],
+   [0,6,8,9,9,9,9,9,6,0],
+   [7,7,6,8,9,9,8,5,7,7],
+   [8,9,5,5,6,6,6,5,8,9],
+   [0,6,5,5,5,5,5,5,4,0],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 5杯
+  [[0,1,4,5,5,5,4,4,0,0],
+   [7,5,5,9,7,7,9,6,4,7],
+   [9,5,7,2,7,7,8,2,5,9],
+   [0,5,7,2,8,8,8,2,5,0],
+   [0,5,7,7,8,9,8,7,5,0],
+   [0,6,9,9,9,9,9,9,6,0],
+   [7,7,6,9,9,9,9,5,7,7],
+   [8,9,5,5,9,9,8,5,8,9],
+   [0,6,5,5,5,5,5,5,4,0],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 6杯
+  [[0,1,4,5,5,5,4,4,0,0],
+   [0,5,5,8,8,7,8,6,4,0],
+   [7,5,9,9,7,7,9,9,5,7],
+   [9,5,2,8,8,8,2,9,5,9],
+   [0,5,7,7,8,9,8,7,5,0],
+   [0,6,8,9,9,9,9,9,6,0],
+   [0,7,6,8,9,9,8,5,5,4],
+   [8,9,5,5,6,6,6,5,8,9],
+   [9,9,5,5,5,5,5,5,4,9],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 7杯 (7,8用)
+  [[0,1,4,5,5,5,4,4,0,0],
+   [0,5,5,9,8,8,9,6,4,0],
+   [8,5,9,3,9,9,3,9,5,8],
+   [9,5,9,3,9,9,3,9,4,9],
+   [0,5,7,7,8,8,8,8,4,0],
+   [0,4,9,9,9,9,9,9,4,0],
+   [0,7,6,8,9,9,8,4,7,0],
+   [8,9,5,5,6,6,6,5,8,9],
+   [9,9,5,5,5,5,5,5,9,9],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 8杯 (7,8用)
+  [[0,1,4,5,5,5,4,4,0,0],
+   [0,5,5,9,8,8,9,6,4,0],
+   [8,5,9,3,9,9,3,9,5,8],
+   [9,5,9,3,9,9,3,9,4,9],
+   [0,5,7,7,8,8,8,8,4,0],
+   [0,4,9,9,9,9,9,9,4,0],
+   [0,7,6,8,9,9,8,4,7,0],
+   [8,9,5,5,6,6,6,5,8,9],
+   [9,9,5,5,5,5,5,5,9,9],
+   [0,6,6,4,0,0,5,6,6,0]],
+
+  // 9杯 (9,10用)
+  [[0,0,4,5,5,5,4,4,1,0],
+   [0,5,5,5,5,5,5,5,4,0],
+   [8,9,6,6,6,6,6,5,5,9],
+   [9,9,6,6,6,6,6,6,5,9],
+   [0,6,6,6,6,6,6,6,6,0],
+   [0,5,6,6,6,6,6,6,6,0],
+   [8,9,6,6,6,6,6,6,5,0],
+   [9,9,6,6,6,6,6,5,4,4],
+   [9,6,6,6,6,6,6,5,5,6],
+   [0,6,6,6,6,6,6,6,6,0]],
+
+  // 10杯 (9,10用)
+  [[0,0,4,5,5,5,4,4,1,0],
+   [0,5,5,5,5,5,5,5,4,0],
+   [8,9,6,6,6,6,6,5,5,9],
+   [9,9,6,6,6,6,6,6,5,9],
+   [0,6,6,6,6,6,6,6,6,0],
+   [0,5,6,6,6,6,6,6,6,0],
+   [8,9,6,6,6,6,6,6,5,0],
+   [9,9,6,6,6,6,6,5,4,4],
+   [9,6,6,6,6,6,6,5,5,6],
+   [0,6,6,6,6,6,6,6,6,0]],
+
+];
+
+let count = 0;
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+const cNum = document.getElementById('cNum');
+const flv = document.getElementById('flv');
+const dotsRow = document.getElementById('dotsRow');
+const charArea = document.getElementById('charArea');
+const btnP1 = document.getElementById('btnP1');
+const btnP2 = document.getElementById('btnP2');
+
+// Build dot elements
+const dots = [];
+for (let i = 0; i < MAX; i++) {
+  const d = document.createElement('div');
+  d.className = 'dot';
+  dotsRow.appendChild(d);
+  dots.push(d);
+}
+
+function drawSprite(n) {
+  const sp = SP[n];
+  ctx.clearRect(0, 0, 10, 10);
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 10; x++) {
+      const ci = sp[y][x];
+      if (ci !== 0 && PAL[ci]) {
+        ctx.fillStyle = PAL[ci];
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+}
+
+function updateUI(animate) {
+  const idx = Math.min(count, MAX);
+  const bg = BGS[idx];
+  const dark = DARK_TEXT[idx];
+  const textColor = dark ? '#1A2018' : '#FFFFFF';
+
+  document.body.style.backgroundColor = bg;
+  document.body.style.color = textColor;
+
+  cNum.textContent = count;
+  flv.textContent = TEXTS[idx];
+
+  dots.forEach((d, i) => d.classList.toggle('lit', i < count));
+
+  drawSprite(idx);
+
+  if (animate) {
+    charArea.classList.remove('pop');
+    void charArea.offsetWidth;
+    charArea.classList.add('pop');
+    if (navigator.vibrate) navigator.vibrate(45);
+  }
+}
+
+function add(n) {
+  count += n;
+  updateUI(true);
+}
+
+function rst() {
+  count = 0;
+  updateUI(false);
+}
+
+updateUI(false);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>
+</body>
+</html>
